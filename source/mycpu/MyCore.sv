@@ -76,7 +76,8 @@ module MyCore (
     assign pipe_d_nxt.pc_plus4=pipe_f.pc+32'd4;
     assign pipe_d_nxt.pc=pipe_f.pc;
 
-    assign pipe_d_nxt.instr=32'd0;
+    // assign pipe_d_nxt.instr=32'd0;
+    assign pipe_d_nxt.instr=iresp.data;
 
     AddressTranslator AddressTranslator_inst1(
         .vaddr(pipe_f.pc),
@@ -94,9 +95,9 @@ module MyCore (
     i1          pc_select;
     instr_t     instr;
 
-    // assign instr=pipe_d.instr;
+    assign instr=pipe_d.instr;
     // assign instr=inst_sram_rdata;
-    assign instr=iresp.data;
+    // assign instr=iresp.data;
     assign{
         opcode,
         pipe_e_nxt.rs,
@@ -269,7 +270,8 @@ module MyCore (
     assign pipe_w_nxt.alu_result=pipe_m.alu_result;
     assign pipe_w_nxt.pc=pipe_m.pc;
 
-    assign pipe_w_nxt.read_data=32'd0;
+    // assign pipe_w_nxt.read_data=32'd0;
+    assign pipe_w_nxt.read_data=dresp.data;
 
     // assign data_sram_en=(pipe_m.control.reg_write_val==VAL_MEM)|pipe_m.control.mem_write_en;
     // assign data_sram_wen={4{pipe_m.control.mem_write_en}};
@@ -287,9 +289,9 @@ module MyCore (
 
     // Write Back
     word_t read_data;
-    // assign read_data=pipe_w.read_data;
+    assign read_data=pipe_w.read_data;
     // assign read_data=data_sram_rdata;
-    assign read_data=dresp.data;
+    // assign read_data=dresp.data;
 
     always_comb begin
         wd3=32'd0;
