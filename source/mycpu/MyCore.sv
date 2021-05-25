@@ -92,7 +92,7 @@ module MyCore (
     imm_t       imm_d;
     long_imm_t  long_imm_d;
     funct_t     funct;
-    btype_t     branch_flag;
+    i5          branch_flag;
     i1          pc_select;
     instr_t     instr;
 
@@ -294,18 +294,30 @@ module MyCore (
     // assign dreq.strobe={4{pipe_m.control.mem_write_en}};
     assign dreq.size=MSIZE4;
 
-    always_comb begin:
-        if(pipe_m.contorl.mem_write_en)begin
+    always_comb begin
+        if(pipe_m.control.mem_write_en)begin
+            
             case (pipe_m.control.ls_flag)
-                LS_WORD:dreq.strobe=4'b1111;
-                LS_HALFW:dreq.strobe=4'b11<<pipe_m.alu_result[1:0];
-                LS_BTYE:dreq.strobe=4'b1<<pipe_m.alu_result[1:0];
+                LS_WORD:begin
+                    dreq.strobe=4'b1111;
+                    dreq.data=pipe_m.mem_write_val;
+                end
+                LS_HALFW:begin
+                    dreq.strobe=4'b11<<pipe_m.alu_result[1:0];
+                    dreq.data={2{pipe_m.mem_write_val[15:0]}};
+                end
+                LS_BTYE:begin
+                    dreq.strobe=4'b1<<pipe_m.alu_result[1:0];
+                    dreq.data={4{pipe_m.mem_write_val[7:0]}};
+                end
                 default: begin
                     dreq.strobe=4'b0;
+                    dreq.data=32'd0;
                 end
             endcase
         end else begin
             dreq.strobe=4'b0;
+            dreq.data=32'd0;
         end
     end
 
@@ -315,10 +327,12 @@ module MyCore (
     );
 
     // assign data_sram_wdata=pipe_m.mem_write_val;
-    assign dreq.data=pipe_m.mem_write_val;
+    // assign dreq.data=pipe_m.mem_write_val;
 
     // Write Back
     word_t read_data,read_data_aligned;
+    i8 read_data_byte;
+    i16 read_data_halfw;
     assign read_data=pipe_w.read_data;
     // assign read_data=data_sram_rdata;
     // assign read_data=dresp.data;
@@ -330,11 +344,13 @@ module MyCore (
             // VAL_MEM:wd3=read_data;
             VAL_MEM:begin
                 read_data_aligned=read_data>>{pipe_w.alu_result[1:0],3'b0};
+                read_data_byte=read_data_aligned[7:0];
+                read_data_halfw=read_data_aligned[15:0];
                 case (pipe_w.control.ls_flag)
-                    LS_BTYE: wd3=`SIGN_EXTEND(read_data_aligned[7:0] ,32);
-                    LS_BTYE_U:wd3=`ZERO_EXTEND(read_data_aligned[7:0],32);
-                    LS_HALFW:wd3=`SIGN_EXTEND(read_data_aligned[15:0],32);
-                    LS_HALFW_U:wd3=`ZERO_EXTEND(read_data_aligned[15:0],32);
+                    LS_BTYE: wd3=`SIGN_EXTEND(read_data_byte ,32);
+                    LS_BTYE_U:wd3=`ZERO_EXTEND(read_data_byte,32);
+                    LS_HALFW:wd3=`SIGN_EXTEND(read_data_halfw,32);
+                    LS_HALFW_U:wd3=`ZERO_EXTEND(read_data_halfw,32);
                     LS_WORD:wd3=read_data;
                     default: begin
                         

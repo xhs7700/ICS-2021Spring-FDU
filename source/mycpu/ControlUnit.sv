@@ -5,7 +5,7 @@
 module ControlUnit (
     input opcode_t opcode,
     input funct_t funct,
-    input btype_t branch_flag,
+    input i5 branch_flag,
     output control_t control
 );
     control_t control_nop;
@@ -86,6 +86,12 @@ module ControlUnit (
                     BF_BLTZ:control.branch=BR_BLTZ;
                     BF_BGEZAL:begin
                         control.branch=BR_BGEZ;
+                        control.reg_write_en=1'b1;
+                        control.reg_write_val=VAL_PC;
+                        control.reg_dst=REG_DST_RA;
+                    end
+                    BF_BLTZAL:begin
+                        control.branch=BR_BLTZ;
                         control.reg_write_en=1'b1;
                         control.reg_write_val=VAL_PC;
                         control.reg_dst=REG_DST_RA;
