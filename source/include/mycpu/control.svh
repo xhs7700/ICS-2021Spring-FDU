@@ -11,7 +11,8 @@ typedef enum i4 {
     ALU_SRC_IMM_S,
     ALU_SRC_IMM_Z,
     ALU_SRC_IMM_H,
-    ALU_SRC_SHAMT
+    ALU_SRC_SHAMT,
+    ALU_SRC_ZERO
 } ctrl_alu_src_t;
 
 typedef enum i4 { 
@@ -29,12 +30,16 @@ typedef enum i4 {
     ALU_OP_SLTU
  } ctrl_alu_op_t;
 
-typedef enum i3 { 
+typedef enum i4 { 
     BR_NONE,
     BR_BEQ,
     BR_BNE,
     BR_JR,
-    BR_J
+    BR_J,
+    BR_BGEZ,
+    BR_BGTZ,
+    BR_BLEZ,
+    BR_BLTZ
  } ctrl_branch_t;
 
 typedef enum i3 { 
@@ -58,6 +63,13 @@ typedef enum i3 {
     HAZ_RES_W
  } hazard_forward_t;
 
+typedef enum i2 { 
+    BTYE,
+    BTYE_U,
+    HALFW,
+    HALFW_U
+} load_store_t;
+
 typedef struct packed {
     ctrl_alu_src_t alu_src_a;
     ctrl_alu_src_t alu_src_b;
@@ -67,6 +79,7 @@ typedef struct packed {
     i1 mem_write_en;
     ctrl_reg_val_t reg_write_val;
     ctrl_reg_dst_t reg_dst;
+    load_store_t ls_flag;
 } control_t;
 
 `endif
