@@ -2,10 +2,7 @@
 `include "mycpu/control.svh"
 
 module Hazard (
-    input ibus_req_t  ireq,
-    input ibus_resp_t iresp,
-    input dbus_req_t  dreq,
-    input dbus_resp_t dresp,
+    input i1 i_valid,d_valid,i_data_ok,d_data_ok,
     input ctrl_branch_t branch_d,
     input ctrl_reg_val_t reg_write_val_e,reg_write_val_m,
     input i1 reg_write_en_e,reg_write_en_m,reg_write_en_w,
@@ -30,9 +27,9 @@ module Hazard (
         endcase
     end
     
-    assign iresp_stall=ireq.valid & (~iresp.data_ok);
-    // assign iresp_stall=(~iresp.data_ok);
-    assign dresp_stall=dreq.valid & (~dresp.data_ok);
+    assign iresp_stall=i_valid & (~i_data_ok);
+    // assign iresp_stall=(~i_data_ok);
+    assign dresp_stall=d_valid & (~d_data_ok);
 
     assign stall_f=lw_stall | iresp_stall | dresp_stall;
     assign stall_d=lw_stall | iresp_stall | dresp_stall;

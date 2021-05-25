@@ -49,15 +49,22 @@ module MyCore (
 
     // Register File
     regidx_t ra1,ra2;
-    word_t wd3,rd1,rd2;
+    regidx_t wa3 /* verilator public_flat_rd */;
+    i1 we3 /* verilator public_flat_rd */;
+    word_t wd3 /* verilator public_flat_rd */;
+    word_t rd1,rd2;
     
-    RegFile RegFile_inst(
-        .wa3(pipe_w.reg_write_dst),
-        .we3(pipe_w.control.reg_write_en),
-        .*);
+    assign wa3=pipe_w.reg_write_dst;
+    assign we3=pipe_w.control.reg_write_en;
+
+    RegFile RegFile_inst(.*);
 
     // Hazard Module
     Hazard Hazard_inst(
+        .i_valid(ireq.valid),
+        .d_valid(dreq.valid),
+        .i_data_ok(iresp.data_ok),
+        .d_data_ok(dresp.data_ok),
         .branch_d(pipe_e_nxt.control.branch),
         .reg_write_val_e(pipe_e.control.reg_write_val),
         .reg_write_val_m(pipe_m.control.reg_write_val),
@@ -84,7 +91,6 @@ module MyCore (
         .paddr(ireq.addr)
     );
 
-    // assign inst_sram_en=1'b1;
     assign ireq.valid=resetn;
 
     // Decode
@@ -97,7 +103,6 @@ module MyCore (
     instr_t     instr;
 
     assign instr=pipe_d.instr;
-    // assign instr=inst_sram_rdata;
     // assign instr=iresp.data;
     assign{
         opcode,
@@ -288,8 +293,6 @@ module MyCore (
     // assign pipe_w_nxt.read_data=32'd0;
     assign pipe_w_nxt.read_data=dresp.data;
 
-    // assign data_sram_en=(pipe_m.control.reg_write_val==VAL_MEM)|pipe_m.control.mem_write_en;
-    // assign data_sram_wen={4{pipe_m.control.mem_write_en}};
     assign dreq.valid=(pipe_m.control.reg_write_val==VAL_MEM)|pipe_m.control.mem_write_en;
     // assign dreq.strobe={4{pipe_m.control.mem_write_en}};
     assign dreq.size=MSIZE4;
@@ -326,22 +329,22 @@ module MyCore (
         .paddr(dreq.addr)
     );
 
-    // assign data_sram_wdata=pipe_m.mem_write_val;
     // assign dreq.data=pipe_m.mem_write_val;
 
     // Write Back
     word_t read_data,read_data_aligned;
+    addr_t wpc /* verilator public_flat_rd */;
     i8 read_data_byte;
     i16 read_data_halfw;
-    assign read_data=pipe_w.read_data;
-    // assign read_data=data_sram_rdata;
+
     // assign read_data=dresp.data;
+    assign read_data=pipe_w.read_data;
+    assign wpc=pipe_w.pc;
 
     always_comb begin
         wd3=32'd0;
         case (pipe_w.control.reg_write_val)
             VAL_ALU_RES:wd3=pipe_w.alu_result;
-            // VAL_MEM:wd3=read_data;
             VAL_MEM:begin
                 read_data_aligned=read_data>>{pipe_w.alu_result[1:0],3'b0};
                 read_data_byte=read_data_aligned[7:0];
@@ -398,7 +401,8 @@ module MyCore (
                 BR_NONE,
                 2'b00,
                 VAL_NONE,
-                REG_DST_NONE
+                REG_DST_NONE,
+                LS_NONE
             };
             pipe_e.src_a<=32'd0;
             pipe_e.src_b<=32'd0;
@@ -425,7 +429,8 @@ module MyCore (
                 BR_NONE,
                 2'b00,
                 VAL_NONE,
-                REG_DST_NONE
+                REG_DST_NONE,
+                LS_NONE
             };
             pipe_m.pc<=32'hxxxxxxxx;
             pipe_m.alu_result<=32'd0;
@@ -448,7 +453,8 @@ module MyCore (
                 BR_NONE,
                 2'b00,
                 VAL_NONE,
-                REG_DST_NONE
+                REG_DST_NONE,
+                LS_NONE
             };
             pipe_w.pc<=32'hxxxxxxxx;
             pipe_w.read_data<=32'd0;
