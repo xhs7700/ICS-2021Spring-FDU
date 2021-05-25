@@ -92,6 +92,7 @@ module MyCore (
     imm_t       imm_d;
     long_imm_t  long_imm_d;
     funct_t     funct;
+    btype_t     branch_flag;
     i1          pc_select;
     instr_t     instr;
 
@@ -106,6 +107,7 @@ module MyCore (
         pipe_e_nxt.shamt,
         funct}=instr;
     assign imm_d=instr[15:0];
+    assign branch_flag=instr[20:16];
     assign long_imm_d=instr[25:0];
 
     assign pipe_e_nxt.pc=pipe_d.pc;
@@ -160,6 +162,7 @@ module MyCore (
                 pipe_e_nxt.imm=`SIGN_EXTEND(imm_d,32);
             end
             ALU_SRC_IMM_H:pipe_e_nxt.imm={imm_d,16'd0};
+            ALU_SRC_ZERO:pipe_e_nxt.imm=`SIGN_EXTEND(imm_d,32);
             default: begin
                 
             end
@@ -169,7 +172,7 @@ module MyCore (
     always_comb begin
         pc_branch=pipe_d.pc_plus4;
         case (pipe_e_nxt.control.branch)
-            BR_BEQ,BR_BNE: pc_branch=pipe_d.pc_plus4+(pipe_e_nxt.imm<<2);
+            BR_BEQ,BR_BNE,BR_BGEZ,BR_BGTZ,BR_BLEZ,BR_BLTZ: pc_branch=pipe_d.pc_plus4+(pipe_e_nxt.imm<<2);
             BR_J:pc_branch={pipe_d.pc_plus4[31:28],long_imm_d,2'b00};
             BR_JR:pc_branch=pipe_e_nxt.src_a;
             default: begin
@@ -178,11 +181,20 @@ module MyCore (
         endcase
     end
 
+    i1 sign_signal,zero_signal;
+
+    assign sign_signal=pipe_e_nxt.src_a[31];
+    assign zero_signal=(pipe_e_nxt.src_a==32'd0);
+
     always_comb begin
         pc_select=1'b0;
         case (pipe_e_nxt.control.branch)
             BR_BEQ,BR_BNE:pc_select=(pipe_e_nxt.control.branch==BR_BNE)^(pipe_e_nxt.src_a==pipe_e_nxt.src_b);
             BR_J,BR_JR:pc_select=1'b1;
+            BR_BGEZ:pc_select=(~sign_signal);
+            BR_BGTZ:pc_select=(~sign_signal)&(~zero_signal);
+            BR_BLEZ:pc_select=sign_signal | zero_signal;
+            BR_BLTZ:pc_select=sign_signal;
             default: begin
                 
             end
@@ -253,8 +265,11 @@ module MyCore (
             ALU_OP_NOR:     pipe_m_nxt.alu_result=~(alu_input_a | alu_input_b);
             ALU_OP_XOR:     pipe_m_nxt.alu_result=  alu_input_a ^ alu_input_b;
             ALU_OP_SLL:     pipe_m_nxt.alu_result=  alu_input_b <<  pipe_e.shamt;
+            ALU_OP_SLLV:    pipe_m_nxt.alu_result=  alu_input_b <<  alu_input_a[4:0];
             ALU_OP_SRA:     pipe_m_nxt.alu_result=  signed'(alu_input_b) >>> pipe_e.shamt;
+            ALU_OP_SRAV:    pipe_m_nxt.alu_result=  signed'(alu_input_b) >>> alu_input_a[4:0];
             ALU_OP_SRL:     pipe_m_nxt.alu_result=  alu_input_b >>  pipe_e.shamt;
+            ALU_OP_SRLV:    pipe_m_nxt.alu_result=  alu_input_b >>  alu_input_a[4:0];
             ALU_OP_SLT:     pipe_m_nxt.alu_result=  {31'b0,signed'(alu_input_a)<signed'(alu_input_b)};
             ALU_OP_SLTU:    pipe_m_nxt.alu_result=  {31'b0,alu_input_a < alu_input_b};
             default: begin
@@ -276,8 +291,23 @@ module MyCore (
     // assign data_sram_en=(pipe_m.control.reg_write_val==VAL_MEM)|pipe_m.control.mem_write_en;
     // assign data_sram_wen={4{pipe_m.control.mem_write_en}};
     assign dreq.valid=(pipe_m.control.reg_write_val==VAL_MEM)|pipe_m.control.mem_write_en;
-    assign dreq.strobe={4{pipe_m.control.mem_write_en}};
+    // assign dreq.strobe={4{pipe_m.control.mem_write_en}};
     assign dreq.size=MSIZE4;
+
+    always_comb begin:
+        if(pipe_m.contorl.mem_write_en)begin
+            case (pipe_m.control.ls_flag)
+                LS_WORD:dreq.strobe=4'b1111;
+                LS_HALFW:dreq.strobe=4'b11<<pipe_m.alu_result[1:0];
+                LS_BTYE:dreq.strobe=4'b1<<pipe_m.alu_result[1:0];
+                default: begin
+                    dreq.strobe=4'b0;
+                end
+            endcase
+        end else begin
+            dreq.strobe=4'b0;
+        end
+    end
 
     AddressTranslator AddressTranslator_inst2(
         .vaddr(pipe_m.alu_result),
@@ -288,7 +318,7 @@ module MyCore (
     assign dreq.data=pipe_m.mem_write_val;
 
     // Write Back
-    word_t read_data;
+    word_t read_data,read_data_aligned;
     assign read_data=pipe_w.read_data;
     // assign read_data=data_sram_rdata;
     // assign read_data=dresp.data;
@@ -297,7 +327,20 @@ module MyCore (
         wd3=32'd0;
         case (pipe_w.control.reg_write_val)
             VAL_ALU_RES:wd3=pipe_w.alu_result;
-            VAL_MEM:wd3=read_data;
+            // VAL_MEM:wd3=read_data;
+            VAL_MEM:begin
+                read_data_aligned=read_data>>{pipe_w.alu_result[1:0],3'b0};
+                case (pipe_w.control.ls_flag)
+                    LS_BTYE: wd3=`SIGN_EXTEND(read_data_aligned[7:0] ,32);
+                    LS_BTYE_U:wd3=`ZERO_EXTEND(read_data_aligned[7:0],32);
+                    LS_HALFW:wd3=`SIGN_EXTEND(read_data_aligned[15:0],32);
+                    LS_HALFW_U:wd3=`ZERO_EXTEND(read_data_aligned[15:0],32);
+                    LS_WORD:wd3=read_data;
+                    default: begin
+                        
+                    end
+                endcase
+            end
             VAL_PC:wd3=pipe_w.pc_plus8;
             default: begin
                 

@@ -5,8 +5,20 @@
 module ControlUnit (
     input opcode_t opcode,
     input funct_t funct,
+    input btype_t branch_flag,
     output control_t control
 );
+    control_t control_nop;
+    assign control_nop={
+        ALU_SRC_NONE,
+        ALU_SRC_NONE,
+        ALU_OP_NONE,
+        BR_NONE,
+        2'b00,
+        VAL_NONE,
+        REG_DST_NONE,
+        LS_NONE
+    };
     always_comb begin
         control={
             ALU_SRC_RS,
@@ -15,74 +27,70 @@ module ControlUnit (
             BR_NONE,
             2'b10,
             VAL_ALU_RES,
-            REG_DST_RT
+            REG_DST_RT,
+            LS_NONE
         };
         unique case (opcode)
             OP_RTYPE: begin
                 control.alu_src_b=ALU_SRC_RT;
                 control.reg_dst=REG_DST_RD;
                 case (funct)
-                    FN_ADDU: begin
-                        control.alu_op=ALU_OP_PLUS;
-                    end
-                    FN_AND:begin
-                        control.alu_op=ALU_OP_AND;
+                    FN_ADDU:control.alu_op=ALU_OP_PLUS;
+                    FN_AND:control.alu_op=ALU_OP_AND;
+                    FN_JALR:begin
+                        control.alu_src_b=ALU_SRC_NONE;
+                        control.branch=BR_JR;
+                        control.reg_write_val=VAL_PC;
                     end
                     FN_JR:begin
-                        control={
-                            ALU_SRC_RS,
-                            ALU_SRC_NONE,
-                            ALU_OP_NONE,
-                            BR_JR,
-                            2'b00,
-                            VAL_NONE,
-                            REG_DST_NONE
-                        };
+                        control.alu_src_b=ALU_SRC_NONE;
+                        control.branch=BR_JR;
+                        control.reg_write_en=1'b0;
+                        control.reg_write_val=VAL_NONE;
+                        control.reg_dst=REG_DST_NONE;
                     end
-                    FN_NOR:begin
-                        control.alu_op=ALU_OP_NOR;
-                    end
-                    FN_OR:begin
-                        control.alu_op=ALU_OP_OR;
-                    end
+                    FN_NOR:control.alu_op=ALU_OP_NOR;
+                    FN_OR:control.alu_op=ALU_OP_OR;
                     FN_SLL:begin
                         control.alu_op=ALU_OP_SLL;
                         control.alu_src_a=ALU_SRC_SHAMT;
                         control.alu_src_b=ALU_SRC_RT;
                     end
-                    FN_SLT:begin
-                        control.alu_op=ALU_OP_SLT;
-                    end
-                    FN_SLTU:begin
-                        control.alu_op=ALU_OP_SLTU;
-                    end
+                    FN_SLLV:control.alu_op=ALU_OP_SLLV;
+                    FN_SLT:control.alu_op=ALU_OP_SLT;
+                    FN_SLTU:control.alu_op=ALU_OP_SLTU;
                     FN_SRA:begin
                         control.alu_op=ALU_OP_SRA;
                         control.alu_src_a=ALU_SRC_SHAMT;
                         control.alu_src_b=ALU_SRC_RT;
                     end
+                    FN_SRAV:control.alu_op=ALU_OP_SRAV;
                     FN_SRL:begin
                         control.alu_op=ALU_OP_SRL;
                         control.alu_src_a=ALU_SRC_SHAMT;
                         control.alu_src_b=ALU_SRC_RT;
                     end
-                    FN_SUBU:begin
-                        control.alu_op=ALU_OP_MINUS;
+                    FN_SRLV:control.alu_op=ALU_OP_SRLV;
+                    FN_SUBU:control.alu_op=ALU_OP_MINUS;
+                    FN_XOR:control.alu_op=ALU_OP_XOR;
+                    default:control=control_nop;
+                endcase
+            end
+            OP_BTYPE: begin
+                control.alu_src_b=ALU_SRC_ZERO;
+                control.reg_write_en=1'b0;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
+                case (branch_flag)
+                    BF_BGEZ:control.branch=BR_BGEZ;
+                    BF_BLTZ:control.branch=BR_BLTZ;
+                    BF_BGEZAL:begin
+                        control.branch=BR_BGEZ;
+                        control.reg_write_en=1'b1;
+                        control.reg_write_val=VAL_PC;
+                        control.reg_dst=REG_DST_RA;
                     end
-                    FN_XOR:begin
-                        control.alu_op=ALU_OP_XOR;
-                    end
-                    default: begin
-                        control={
-                            ALU_SRC_NONE,
-                            ALU_SRC_NONE,
-                            ALU_OP_NONE,
-                            BR_NONE,
-                            2'b00,
-                            VAL_NONE,
-                            REG_DST_NONE
-                        };
-                    end
+                    default:control=control_nop;
                 endcase
             end
             OP_ADDIU:begin
@@ -93,26 +101,32 @@ module ControlUnit (
                 control.alu_op=ALU_OP_AND;
             end
             OP_BEQ:begin
-                control={
-                    ALU_SRC_RS,
-                    ALU_SRC_RT,
-                    ALU_OP_NONE,
-                    BR_BEQ,
-                    2'b00,
-                    VAL_NONE,
-                    REG_DST_NONE
-                };
+                control.alu_src_b=ALU_SRC_RT;
+                control.branch=BR_BEQ;
+                control.reg_write_en=1'b0;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
+            end
+            OP_BGTZ:begin
+                control.alu_src_b=ALU_SRC_ZERO;
+                control.branch=BR_BGTZ;
+                control.reg_write_en=1'b0;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
+            end
+            OP_BLEZ:begin
+                control.alu_src_b=ALU_SRC_ZERO;
+                control.branch=BR_BLEZ;
+                control.reg_write_en=1'b0;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
             end
             OP_BNE:begin
-                control={
-                    ALU_SRC_RS,
-                    ALU_SRC_RT,
-                    ALU_OP_NONE,
-                    BR_BNE,
-                    2'b00,
-                    VAL_NONE,
-                    REG_DST_NONE
-                };
+                control.alu_src_b=ALU_SRC_RT;
+                control.branch=BR_BNE;
+                control.reg_write_en=1'b0;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
             end
             OP_J:begin
                 control={
@@ -122,7 +136,8 @@ module ControlUnit (
                     BR_J,
                     2'b00,
                     VAL_NONE,
-                    REG_DST_NONE
+                    REG_DST_NONE,
+                    LS_NONE
                 };
             end
             OP_JAL:begin
@@ -133,16 +148,38 @@ module ControlUnit (
                     BR_J,
                     2'b10,
                     VAL_PC,
-                    REG_DST_RA
+                    REG_DST_RA,
+                    LS_NONE
                 };
             end
             OP_LUI:begin
                 control.alu_src_b=ALU_SRC_IMM_H;
                 control.alu_op=ALU_OP_OR;
             end
+            OP_LB:begin
+                control.alu_op=ALU_OP_PLUS;
+                control.reg_write_val=VAL_MEM;
+                control.ls_flag=LS_BTYE;
+            end
+            OP_LBU:begin
+                control.alu_op=ALU_OP_PLUS;
+                control.reg_write_val=VAL_MEM;
+                control.ls_flag=LS_BTYE_U;
+            end
+            OP_LH:begin
+                control.alu_op=ALU_OP_PLUS;
+                control.reg_write_val=VAL_MEM;
+                control.ls_flag=LS_HALFW;
+            end
+            OP_LHU:begin
+                control.alu_op=ALU_OP_PLUS;
+                control.reg_write_val=VAL_MEM;
+                control.ls_flag=LS_HALFW_U;
+            end
             OP_LW:begin
                 control.alu_op=ALU_OP_PLUS;
                 control.reg_write_val=VAL_MEM;
+                control.ls_flag=LS_WORD;
             end
             OP_ORI:begin
                 control.alu_src_b=ALU_SRC_IMM_Z;
@@ -154,28 +191,35 @@ module ControlUnit (
             OP_SLTIU:begin
                 control.alu_op=ALU_OP_SLTU;
             end
+            OP_SB:begin
+                control.alu_op=ALU_OP_PLUS;
+                control.reg_write_en=1'b0;
+                control.mem_write_en=1'b1;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
+                control.ls_flag=LS_BTYE;
+            end
+            OP_SH:begin
+                control.alu_op=ALU_OP_PLUS;
+                control.reg_write_en=1'b0;
+                control.mem_write_en=1'b1;
+                control.reg_write_val=VAL_NONE;
+                control.reg_dst=REG_DST_NONE;
+                control.ls_flag=LS_HALFW;
+            end
             OP_SW:begin
                 control.alu_op=ALU_OP_PLUS;
                 control.reg_write_en=1'b0;
                 control.mem_write_en=1'b1;
                 control.reg_write_val=VAL_NONE;
                 control.reg_dst=REG_DST_NONE;
+                control.ls_flag=LS_WORD;
             end
             OP_XORI:begin
                 control.alu_src_b=ALU_SRC_IMM_Z;
                 control.alu_op=ALU_OP_XOR;
             end
-            default: begin
-                control={
-                    ALU_SRC_NONE,
-                    ALU_SRC_NONE,
-                    ALU_OP_NONE,
-                    BR_NONE,
-                    2'b00,
-                    VAL_NONE,
-                    REG_DST_NONE
-                };
-            end
+            default:control=control_nop;
         endcase
     end
 endmodule

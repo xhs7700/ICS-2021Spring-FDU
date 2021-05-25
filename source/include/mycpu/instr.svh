@@ -67,4 +67,11 @@ typedef enum i6 {
     FN_SLTU    = 6'b101011
 } funct_t;
 
+typedef enum i5 {
+    BF_BLTZ   = 5'b00000,
+    BF_BGEZ   = 5'b00001,
+    BF_BLTZAL = 5'b10000,
+    BF_BGEZAL = 5'b10001
+} btype_t;
+
 `endif

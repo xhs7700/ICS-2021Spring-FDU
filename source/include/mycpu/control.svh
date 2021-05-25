@@ -24,8 +24,11 @@ typedef enum i4 {
     ALU_OP_NOR,
     ALU_OP_XOR,
     ALU_OP_SLL,
+    ALU_OP_SLLV,
     ALU_OP_SRA,
+    ALU_OP_SRAV,
     ALU_OP_SRL,
+    ALU_OP_SRLV,
     ALU_OP_SLT,
     ALU_OP_SLTU
  } ctrl_alu_op_t;
@@ -63,11 +66,13 @@ typedef enum i3 {
     HAZ_RES_W
  } hazard_forward_t;
 
-typedef enum i2 { 
-    BTYE,
-    BTYE_U,
-    HALFW,
-    HALFW_U
+typedef enum i3 { 
+    LS_BTYE,
+    LS_BTYE_U,
+    LS_HALFW,
+    LS_HALFW_U,
+    LS_WORD,
+    LS_NONE
 } load_store_t;
 
 typedef struct packed {
