@@ -8,8 +8,7 @@ module ControlUnit (
     output control_t control
 );
     control_t control_nop;
-    opcode_t opcode;
-    funct_t funct;
+    i6 opcode,funct;
     assign opcode=instr[31:26];
     assign funct=instr[5:0];
     assign control_nop={
