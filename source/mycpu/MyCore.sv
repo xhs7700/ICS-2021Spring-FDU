@@ -94,23 +94,19 @@ module MyCore (
     assign ireq.valid=resetn;
 
     // Decode
-    opcode_t    opcode;
     imm_t       imm_d;
     long_imm_t  long_imm_d;
-    funct_t     funct;
     i5          branch_flag;
     i1          pc_select;
     instr_t     instr;
 
     assign instr=pipe_d.instr;
     // assign instr=iresp.data;
-    assign{
-        opcode,
-        pipe_e_nxt.rs,
-        pipe_e_nxt.rt,
-        pipe_e_nxt.rd,
-        pipe_e_nxt.shamt,
-        funct}=instr;
+    
+    assign pipe_e_nxt.rs=instr[25:21];
+    assign pipe_e_nxt.rt=instr[20:16];
+    assign pipe_e_nxt.rd=instr[15:11];
+    assign pipe_e_nxt.shamt=instr[10:6];
     assign imm_d=instr[15:0];
     assign branch_flag=instr[20:16];
     assign long_imm_d=instr[25:0];
@@ -121,41 +117,36 @@ module MyCore (
     ControlUnit ControlUnit_inst(.control(pipe_e_nxt.control),.*);
 
     always_comb begin
-        pipe_e_nxt.src_a=rd1;
         case (forward_d_a)
             HAZ_ALU_RES_E:pipe_e_nxt.src_a=pipe_m_nxt.alu_result;
             HAZ_ALU_RES_M:pipe_e_nxt.src_a=pipe_m.alu_result;
             HAZ_RES_W:pipe_e_nxt.src_a=wd3;
             default: begin
-                
+                pipe_e_nxt.src_a=rd1;
             end
         endcase
     end
 
     always_comb begin
-        pipe_e_nxt.src_b=rd2;
         case (forward_d_b)
             HAZ_ALU_RES_E:pipe_e_nxt.src_b=pipe_m_nxt.alu_result;
             HAZ_ALU_RES_M:pipe_e_nxt.src_b=pipe_m.alu_result;
             HAZ_RES_W:pipe_e_nxt.src_b=wd3;
             default: begin
-                
+                pipe_e_nxt.src_b=rd2;
             end
         endcase
     end
 
     always_comb begin
-        ra1=5'd0;
         case (pipe_e_nxt.control.alu_src_a)
             ALU_SRC_RS:ra1=pipe_e_nxt.rs;
             default: begin
-                
+                ra1=5'd0;
             end
         endcase
     end
     always_comb begin
-        ra2=5'd0;
-        pipe_e_nxt.imm=32'd0;
         case (pipe_e_nxt.control.alu_src_b)
             ALU_SRC_RT:begin
                 ra2=pipe_e_nxt.rt;
@@ -169,19 +160,19 @@ module MyCore (
             ALU_SRC_IMM_H:pipe_e_nxt.imm={imm_d,16'd0};
             ALU_SRC_ZERO:pipe_e_nxt.imm=`SIGN_EXTEND(imm_d,32);
             default: begin
-                
+                ra2=5'd0;
+                pipe_e_nxt.imm=32'd0;
             end
         endcase
     end
     
     always_comb begin
-        pc_branch=pipe_d.pc_plus4;
         case (pipe_e_nxt.control.branch)
             BR_BEQ,BR_BNE,BR_BGEZ,BR_BGTZ,BR_BLEZ,BR_BLTZ: pc_branch=pipe_d.pc_plus4+(pipe_e_nxt.imm<<2);
             BR_J:pc_branch={pipe_d.pc_plus4[31:28],long_imm_d,2'b00};
             BR_JR:pc_branch=pipe_e_nxt.src_a;
             default: begin
-                
+                pc_branch=pipe_d.pc_plus4;
             end
         endcase
     end
@@ -192,7 +183,6 @@ module MyCore (
     assign zero_signal=(pipe_e_nxt.src_a==32'd0);
 
     always_comb begin
-        pc_select=1'b0;
         case (pipe_e_nxt.control.branch)
             BR_BEQ,BR_BNE:pc_select=(pipe_e_nxt.control.branch==BR_BNE)^(pipe_e_nxt.src_a==pipe_e_nxt.src_b);
             BR_J,BR_JR:pc_select=1'b1;
@@ -201,19 +191,18 @@ module MyCore (
             BR_BLEZ:pc_select=sign_signal | zero_signal;
             BR_BLTZ:pc_select=sign_signal;
             default: begin
-                
+                pc_select=1'b0;
             end
         endcase
     end
 
     always_comb begin
-        pipe_e_nxt.reg_write_dst=5'd0;
         case (pipe_e_nxt.control.reg_dst)
             REG_DST_RT:pipe_e_nxt.reg_write_dst=pipe_e_nxt.rt;
             REG_DST_RD:pipe_e_nxt.reg_write_dst=pipe_e_nxt.rd;
             REG_DST_RA:pipe_e_nxt.reg_write_dst=5'd31;
             default: begin
-                
+                pipe_e_nxt.reg_write_dst=5'd0;
             end
         endcase
     end
@@ -227,41 +216,37 @@ module MyCore (
     assign pipe_m_nxt.pc=pipe_e.pc;
     
     always_comb begin
-        alu_input_a=pipe_e.src_a;
         case (forward_e_a)
             HAZ_RES_W:alu_input_a=wd3;
             HAZ_ALU_RES_M:alu_input_a=pipe_m.alu_result;
             default: begin
-                
+                alu_input_a=pipe_e.src_a;
             end
         endcase
     end
 
     always_comb begin
-        pipe_m_nxt.mem_write_val=pipe_e.src_b;
         case (forward_e_b)
             HAZ_RES_W:pipe_m_nxt.mem_write_val=wd3;
             HAZ_ALU_RES_M:pipe_m_nxt.mem_write_val=pipe_m.alu_result;
             default: begin
-                
+                pipe_m_nxt.mem_write_val=pipe_e.src_b;
             end
         endcase
     end
 
     always_comb begin
-        alu_input_b=32'd0;
         case (pipe_e.control.alu_src_b)
             ALU_SRC_IMM_H,ALU_SRC_IMM_Z,ALU_SRC_IMM_S:alu_input_b=pipe_e.imm;
             ALU_SRC_RT:alu_input_b=pipe_m_nxt.mem_write_val;
             default: begin
-                
+                alu_input_b=32'd0;
             end
         endcase
     end
 
     // ALU
     always_comb begin
-        pipe_m_nxt.alu_result=32'd0;
         case (pipe_e.control.alu_op)
             ALU_OP_PLUS:    pipe_m_nxt.alu_result=  alu_input_a + alu_input_b;
             ALU_OP_MINUS:   pipe_m_nxt.alu_result=  alu_input_a - alu_input_b;
@@ -278,7 +263,7 @@ module MyCore (
             ALU_OP_SLT:     pipe_m_nxt.alu_result=  {31'b0,signed'(alu_input_a)<signed'(alu_input_b)};
             ALU_OP_SLTU:    pipe_m_nxt.alu_result=  {31'b0,alu_input_a < alu_input_b};
             default: begin
-
+                pipe_m_nxt.alu_result=32'd0;
             end
         endcase
     end
@@ -299,7 +284,6 @@ module MyCore (
 
     always_comb begin
         if(pipe_m.control.mem_write_en)begin
-            
             case (pipe_m.control.ls_flag)
                 LS_WORD:begin
                     dreq.strobe=4'b1111;
@@ -340,6 +324,7 @@ module MyCore (
     // assign read_data=dresp.data;
     assign read_data=pipe_w.read_data;
     assign wpc=pipe_w.pc;
+    // assign wpc=32'hbfc00000;
 
     always_comb begin
         wd3=32'd0;
