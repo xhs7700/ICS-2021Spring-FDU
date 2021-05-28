@@ -267,12 +267,14 @@ module MyCore (
 
     // ALU
     i64 alu_ans;
+    i33 alu_tmp;
 
     always_comb begin
         pipe_m_nxt.alu_result=32'd0;
         pipe_m_nxt.hi_result=32'd0;
         pipe_m_nxt.lo_result=32'd0;
         alu_ans='0;
+        alu_tmp='0;
         case (pipe_e.control.alu_op)
             ALU_OP_PLUS:    pipe_m_nxt.alu_result=  alu_input_a + alu_input_b;
             ALU_OP_MINUS:   pipe_m_nxt.alu_result=  alu_input_a - alu_input_b;
@@ -307,8 +309,10 @@ module MyCore (
                 pipe_m_nxt.lo_result=alu_ans[31:0];
             end
             ALU_OP_DIVU:begin
-                pipe_m_nxt.lo_result={1'b0,alu_input_a}/{1'b0,alu_input_b};
-                pipe_m_nxt.hi_result={1'b0,alu_input_a}%{1'b0,alu_input_b};
+                alu_tmp={1'b0,alu_input_a}/{1'b0,alu_input_b};
+                pipe_m_nxt.lo_result=alu_tmp[31:0];
+                alu_tmp={1'b0,alu_input_a}%{1'b0,alu_input_b};
+                pipe_m_nxt.hi_result=alu_tmp[31:0];
             end
             ALU_OP_DIV:begin
                 pipe_m_nxt.lo_result=signed'(alu_input_a)/signed'(alu_input_b);
@@ -451,7 +455,7 @@ module MyCore (
                 ALU_SRC_NONE,
                 ALU_OP_NONE,
                 BR_NONE,
-                2'b00,
+                4'b0000,
                 VAL_NONE,
                 REG_DST_NONE,
                 LS_NONE
@@ -479,7 +483,7 @@ module MyCore (
                 ALU_SRC_NONE,
                 ALU_OP_NONE,
                 BR_NONE,
-                2'b00,
+                4'b0000,
                 VAL_NONE,
                 REG_DST_NONE,
                 LS_NONE
@@ -503,7 +507,7 @@ module MyCore (
                 ALU_SRC_NONE,
                 ALU_OP_NONE,
                 BR_NONE,
-                2'b00,
+                4'b0000,
                 VAL_NONE,
                 REG_DST_NONE,
                 LS_NONE
