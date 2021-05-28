@@ -85,8 +85,7 @@ module MyCore (
         .reg_write_dst_m(pipe_m.reg_write_dst),
         .reg_write_dst_w(pipe_w.reg_write_dst),
         .alu_src_d(pipe_e_nxt.control.alu_src_b),
-        .alu_src_e(pipe_e.control.alu_src_b)
-        .*);
+        .alu_src_e(pipe_e.control.alu_src_b),.*);
 
     // Fetch
     addr_t pc_branch;
@@ -259,7 +258,7 @@ module MyCore (
     always_comb begin
         case (pipe_e.control.alu_src_b)
             ALU_SRC_IMM_H,ALU_SRC_IMM_Z,ALU_SRC_IMM_S:alu_input_b=pipe_e.imm;
-            ALU_SRC_RT:alu_input_b=pipe_m_nxt.mem_write_val;
+            ALU_SRC_RT,ALU_SRC_HI,ALU_SRC_LO:alu_input_b=pipe_m_nxt.mem_write_val;
             default: begin
                 alu_input_b=32'd0;
             end
@@ -267,10 +266,13 @@ module MyCore (
     end
 
     // ALU
+    i64 alu_ans;
+
     always_comb begin
         pipe_m_nxt.alu_result=32'd0;
         pipe_m_nxt.hi_result=32'd0;
         pipe_m_nxt.lo_result=32'd0;
+        alu_ans='0;
         case (pipe_e.control.alu_op)
             ALU_OP_PLUS:    pipe_m_nxt.alu_result=  alu_input_a + alu_input_b;
             ALU_OP_MINUS:   pipe_m_nxt.alu_result=  alu_input_a - alu_input_b;
@@ -286,13 +288,31 @@ module MyCore (
             ALU_OP_SRLV:    pipe_m_nxt.alu_result=  alu_input_b >>  alu_input_a[4:0];
             ALU_OP_SLT:     pipe_m_nxt.alu_result=  {31'b0,signed'(alu_input_a)<signed'(alu_input_b)};
             ALU_OP_SLTU:    pipe_m_nxt.alu_result=  {31'b0,alu_input_a < alu_input_b};
-            ALU_OP_MULTU,ALU_OP_MULT,ALU_OP_DIVU,ALU_OP_DIV:begin
-                Mult Mult_inst(
-                    .a(alu_input_a),.b(alu_input_b),
-                    .op(pipe_e.control.alu_op),
-                    .hi(pipe_m_nxt.hi_result),
-                    .lo(pipe_m_nxt.lo_result)
-                );
+            // ALU_OP_MULTU,ALU_OP_MULT,ALU_OP_DIVU,ALU_OP_DIV:begin
+            //     Mult Mult_inst(
+            //         .a(alu_input_a),.b(alu_input_b),
+            //         .op(pipe_e.control.alu_op),
+            //         .hi(pipe_m_nxt.hi_result),
+            //         .lo(pipe_m_nxt.lo_result)
+            //     );
+            // end
+            ALU_OP_MULTU:begin
+                alu_ans={32'b0,alu_input_a}*{32'b0,alu_input_b};
+                pipe_m_nxt.hi_result=alu_ans[63:32];
+                pipe_m_nxt.lo_result=alu_ans[31:0];
+            end
+            ALU_OP_MULT:begin
+                alu_ans=signed'({{32{alu_input_a[31]}},alu_input_a})*signed'({{32{alu_input_b[31]}},alu_input_b});
+                pipe_m_nxt.hi_result=alu_ans[63:32];
+                pipe_m_nxt.lo_result=alu_ans[31:0];
+            end
+            ALU_OP_DIVU:begin
+                pipe_m_nxt.lo_result={1'b0,alu_input_a}/{1'b0,alu_input_b};
+                pipe_m_nxt.hi_result={1'b0,alu_input_a}%{1'b0,alu_input_b};
+            end
+            ALU_OP_DIV:begin
+                pipe_m_nxt.lo_result=signed'(alu_input_a)/signed'(alu_input_b);
+                pipe_m_nxt.hi_result=signed'(alu_input_a)%signed'(alu_input_b);
             end
             default: begin
                 
@@ -305,8 +325,8 @@ module MyCore (
     assign pipe_w_nxt.pc_plus8=pipe_m.pc_plus8;
     assign pipe_w_nxt.reg_write_dst=pipe_m.reg_write_dst;
     assign pipe_w_nxt.alu_result=pipe_m.alu_result;
-    assign pipe_w_nxt.hi_result=pipe_m.hi_result;
-    assign pipe_w_nxt.lo_result=pipe_m.lo_result;
+    // assign pipe_w_nxt.hi_result=pipe_m.hi_result;
+    // assign pipe_w_nxt.lo_result=pipe_m.lo_result;
     assign pipe_w_nxt.pc=pipe_m.pc;
 
     // assign pipe_w_nxt.read_data=32'd0;
@@ -340,6 +360,19 @@ module MyCore (
             dreq.strobe=4'b0;
             dreq.data=32'd0;
         end
+    end
+
+    always_comb begin
+        case (pipe_m.control.hilo_write_en)
+            2'b01,2'b10:begin
+                pipe_w_nxt.hi_result=pipe_m.alu_result;
+                pipe_w_nxt.lo_result=pipe_m.alu_result;
+            end 
+            default: begin
+                pipe_w_nxt.hi_result=pipe_m.hi_result;
+                pipe_w_nxt.lo_result=pipe_m.lo_result;
+            end
+        endcase
     end
 
     AddressTranslator AddressTranslator_inst2(
