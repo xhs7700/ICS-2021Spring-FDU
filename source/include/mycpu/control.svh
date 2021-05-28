@@ -12,10 +12,12 @@ typedef enum i4 {
     ALU_SRC_IMM_Z,
     ALU_SRC_IMM_H,
     ALU_SRC_SHAMT,
-    ALU_SRC_ZERO
+    ALU_SRC_ZERO,
+    ALU_SRC_HI,
+    ALU_SRC_LO
 } ctrl_alu_src_t;
 
-typedef enum i4 { 
+typedef enum i5 { 
     ALU_OP_NONE,
     ALU_OP_PLUS,
     ALU_OP_MINUS,
@@ -30,7 +32,11 @@ typedef enum i4 {
     ALU_OP_SRL,
     ALU_OP_SRLV,
     ALU_OP_SLT,
-    ALU_OP_SLTU
+    ALU_OP_SLTU,
+    ALU_OP_MULTU,
+    ALU_OP_MULT,
+    ALU_OP_DIVU,
+    ALU_OP_DIV
  } ctrl_alu_op_t;
 
 typedef enum i4 { 
@@ -48,15 +54,19 @@ typedef enum i4 {
 typedef enum i3 { 
     VAL_NONE,
     VAL_ALU_RES,
+    VAL_MULT_RES,
     VAL_MEM,
     VAL_PC
  } ctrl_reg_val_t;
 
-typedef enum i2 { 
+typedef enum i3 { 
     REG_DST_NONE,
     REG_DST_RT,
     REG_DST_RD,
-    REG_DST_RA
+    REG_DST_RA,
+    REG_DST_HI,
+    REG_DST_LO,
+    REG_DST_HILO
  } ctrl_reg_dst_t;
 
 typedef enum i3 { 
@@ -82,6 +92,7 @@ typedef struct packed {
     ctrl_branch_t branch;
     i1 reg_write_en;
     i1 mem_write_en;
+    i2 hilo_write_en;
     ctrl_reg_val_t reg_write_val;
     ctrl_reg_dst_t reg_dst;
     load_store_t ls_flag;

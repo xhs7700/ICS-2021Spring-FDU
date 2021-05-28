@@ -16,7 +16,7 @@ module ControlUnit (
         ALU_SRC_NONE,
         ALU_OP_NONE,
         BR_NONE,
-        2'b00,
+        4'b0000,
         VAL_NONE,
         REG_DST_NONE,
         LS_NONE
@@ -30,7 +30,7 @@ module ControlUnit (
                 ALU_SRC_IMM_S,
                 ALU_OP_NONE,
                 BR_NONE,
-                2'b10,
+                4'b1000,
                 VAL_ALU_RES,
                 REG_DST_RT,
                 LS_NONE
@@ -42,6 +42,20 @@ module ControlUnit (
                     case (funct)
                         FN_ADDU:control.alu_op=ALU_OP_PLUS;
                         FN_AND:control.alu_op=ALU_OP_AND;
+                        FN_DIV:begin
+                            control.alu_op=ALU_OP_DIV;
+                            control.reg_write_en=1'b0;
+                            control.hilo_write_en=2'b11;
+                            control.reg_write_val=VAL_MULT_RES;
+                            control.reg_dst=REG_DST_HILO;
+                        end
+                        FN_DIVU:begin
+                            control.alu_op=ALU_OP_DIVU;
+                            control.reg_write_en=1'b0;
+                            control.hilo_write_en=2'b11;
+                            control.reg_write_val=VAL_MULT_RES;
+                            control.reg_dst=REG_DST_HILO;
+                        end
                         FN_JALR:begin
                             control.alu_src_b=ALU_SRC_NONE;
                             control.branch=BR_JR;
@@ -53,6 +67,9 @@ module ControlUnit (
                             control.reg_write_en=1'b0;
                             control.reg_write_val=VAL_NONE;
                             control.reg_dst=REG_DST_NONE;
+                        end
+                        FN_MFHI:begin
+                            // TODO
                         end
                         FN_NOR:control.alu_op=ALU_OP_NOR;
                         FN_OR:control.alu_op=ALU_OP_OR;
@@ -145,7 +162,7 @@ module ControlUnit (
                         ALU_SRC_NONE,
                         ALU_OP_NONE,
                         BR_J,
-                        2'b00,
+                        4'b0000,
                         VAL_NONE,
                         REG_DST_NONE,
                         LS_NONE
@@ -157,7 +174,7 @@ module ControlUnit (
                         ALU_SRC_NONE,
                         ALU_OP_NONE,
                         BR_J,
-                        2'b10,
+                        4'b1000,
                         VAL_PC,
                         REG_DST_RA,
                         LS_NONE
