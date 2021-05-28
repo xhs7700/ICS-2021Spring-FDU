@@ -59,21 +59,22 @@ typedef enum i3 {
     VAL_PC
  } ctrl_reg_val_t;
 
-typedef enum i3 { 
+typedef enum i2 { 
     REG_DST_NONE,
     REG_DST_RT,
     REG_DST_RD,
-    REG_DST_RA,
-    REG_DST_HI,
-    REG_DST_LO,
-    REG_DST_HILO
+    REG_DST_RA
  } ctrl_reg_dst_t;
 
 typedef enum i3 { 
     HAZ_DEFAULT,
     HAZ_ALU_RES_E,
     HAZ_ALU_RES_M,
-    HAZ_RES_W
+    HAZ_RES_W,
+    HAZ_HI_M,
+    HAZ_LO_M,
+    HAZ_HI_W,
+    HAZ_LO_W
  } hazard_forward_t;
 
 typedef enum i3 { 

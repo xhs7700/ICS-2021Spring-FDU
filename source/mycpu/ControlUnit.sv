@@ -47,14 +47,14 @@ module ControlUnit (
                             control.reg_write_en=1'b0;
                             control.hilo_write_en=2'b11;
                             control.reg_write_val=VAL_MULT_RES;
-                            control.reg_dst=REG_DST_HILO;
+                            control.reg_dst=REG_DST_NONE;
                         end
                         FN_DIVU:begin
                             control.alu_op=ALU_OP_DIVU;
                             control.reg_write_en=1'b0;
                             control.hilo_write_en=2'b11;
                             control.reg_write_val=VAL_MULT_RES;
-                            control.reg_dst=REG_DST_HILO;
+                            control.reg_dst=REG_DST_NONE;
                         end
                         FN_JALR:begin
                             control.alu_src_b=ALU_SRC_NONE;
@@ -69,7 +69,40 @@ module ControlUnit (
                             control.reg_dst=REG_DST_NONE;
                         end
                         FN_MFHI:begin
-                            // TODO
+                            control.alu_src_b=ALU_SRC_HI;
+                            control.alu_op=ALU_OP_OR;
+                        end
+                        FN_MFLO:begin
+                            control.alu_src_b=ALU_SRC_LO;
+                            control.alu_op=ALU_OP_OR;
+                        end
+                        FN_MTHI:begin
+                            control.alu_src_b=ALU_SRC_ZERO;
+                            control.alu_op=ALU_OP_OR;
+                            control.reg_write_en=1'b0;
+                            control.hilo_write_en=2'b10;
+                            control.reg_dst=REG_DST_NONE;
+                        end
+                        FN_MTLO:begin
+                            control.alu_src_b=ALU_SRC_ZERO;
+                            control.alu_op=ALU_OP_OR;
+                            control.reg_write_en=1'b0;
+                            control.hilo_write_en=2'b01;
+                            control.reg_dst=REG_DST_NONE;
+                        end
+                        FN_MULT:begin
+                            control.alu_op=ALU_OP_MULT;
+                            control.reg_write_en=1'b0;
+                            control.hilo_write_en=2'b11;
+                            control.reg_write_val=VAL_MULT_RES;
+                            control.reg_dst=REG_DST_NONE;
+                        end
+                        FN_MULTU:begin
+                            control.alu_op=ALU_OP_MULTU;
+                            control.reg_write_en=1'b0;
+                            control.hilo_write_en=2'b11;
+                            control.reg_write_val=VAL_MULT_RES;
+                            control.reg_dst=REG_DST_NONE;
                         end
                         FN_NOR:control.alu_op=ALU_OP_NOR;
                         FN_OR:control.alu_op=ALU_OP_OR;

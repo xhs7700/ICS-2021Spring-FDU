@@ -33,6 +33,8 @@ typedef struct packed {
     addr_t pc;
     control_t control;
     i32 alu_result;
+    word_t hi_result;
+    word_t lo_result;
     word_t mem_write_val;
     regidx_t reg_write_dst;
     addr_t pc_plus8;
@@ -43,6 +45,8 @@ typedef struct packed {
     control_t control;
     word_t read_data;
     word_t alu_result;
+    word_t hi_result;
+    word_t lo_result;
     regidx_t reg_write_dst;
     addr_t pc_plus8;
 } pipeline_reg_write_t;

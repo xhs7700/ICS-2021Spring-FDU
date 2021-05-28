@@ -6,8 +6,10 @@ module Hazard (
     input ctrl_branch_t branch_d,
     input ctrl_reg_val_t reg_write_val_e,reg_write_val_m,
     input i1 reg_write_en_e,reg_write_en_m,reg_write_en_w,
+    input i2 hilo_write_en_m,hilo_write_en_w,
     input regidx_t rs_d,rt_d,rs_e,rt_e,
     input regidx_t reg_write_dst_e,reg_write_dst_m,reg_write_dst_w,
+    input ctrl_alu_src_t alu_src_d,alu_src_e,
     output i1 stall_f,stall_d,stall_e,stall_m,
     output i1 flush_e,flush_w,
     output hazard_forward_t forward_d_a,forward_d_b,forward_e_a,forward_e_b
@@ -39,10 +41,10 @@ module Hazard (
     assign flush_e=lw_stall | iresp_stall;
     assign flush_w=dresp_stall;
 
-    HazardEvalD hazard_eval_d_a(.regidx(rs_d),.forward_d(forward_d_a),.*);
-    HazardEvalD hazard_eval_d_b(.regidx(rt_d),.forward_d(forward_d_b),.*);
+    HazardEvalDA hazard_eval_d_a(.regidx(rs_d),.forward_d(forward_d_a),.*);
+    HazardEvalDB hazard_eval_d_b(.regidx(rt_d),.forward_d(forward_d_b),.alu_src(alu_src_d),.*);
 
-    HazardEvalE hazard_eval_e_a(.regidx(rs_e),.forward_e(forward_e_a),.*);
-    HazardEvalE hazard_eval_e_b(.regidx(rt_e),.forward_e(forward_e_b),.*);
+    HazardEvalE hazard_eval_e_a(.regidx(rs_e),.forward_e(forward_e_a),.alu_src(ALU_SRC_NONE),.*);
+    HazardEvalE hazard_eval_e_b(.regidx(rt_e),.forward_e(forward_e_b),.alu_src(alu_src_e),.*);
 
 endmodule

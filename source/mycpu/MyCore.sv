@@ -53,29 +53,39 @@ module MyCore (
     i1 we3 /* verilator public_flat_rd */;
     word_t wd3 /* verilator public_flat_rd */;
     word_t rd1,rd2;
+    word_t hi,lo;
     
     assign wa3=pipe_w.reg_write_dst;
     assign we3=pipe_w.control.reg_write_en;
 
     RegFile RegFile_inst(.*);
 
+    hilo hilo_inst(
+        .hi_we(pipe_w.control.hilo_write_en[1]),
+        .lo_we(pipe_w.control.hilo_write_en[0]),
+        .hi_data(pipe_w.hi_result),
+        .lo_data(pipe_w.lo_result),
+        .*);
+
     // Hazard Module
     Hazard Hazard_inst(
-        .i_valid(ireq.valid),
-        .d_valid(dreq.valid),
-        .i_data_ok(iresp.data_ok),
-        .d_data_ok(dresp.data_ok),
+        .i_valid(ireq.valid),.d_valid(dreq.valid),
+        .i_data_ok(iresp.data_ok),.d_data_ok(dresp.data_ok),
         .branch_d(pipe_e_nxt.control.branch),
         .reg_write_val_e(pipe_e.control.reg_write_val),
         .reg_write_val_m(pipe_m.control.reg_write_val),
         .reg_write_en_e(pipe_e.control.reg_write_en),
         .reg_write_en_m(pipe_m.control.reg_write_en),
         .reg_write_en_w(pipe_w.control.reg_write_en),
+        .hilo_write_en_m(pipe_m.control.hilo_write_en),
+        .hilo_write_en_w(pipe_w.control.hilo_write_en),
         .rs_d(pipe_e_nxt.rs),.rt_d(pipe_e_nxt.rt),
         .rs_e(pipe_e.rs),.rt_e(pipe_e.rt),
         .reg_write_dst_e(pipe_e.reg_write_dst),
         .reg_write_dst_m(pipe_m.reg_write_dst),
         .reg_write_dst_w(pipe_w.reg_write_dst),
+        .alu_src_d(pipe_e_nxt.control.alu_src_b),
+        .alu_src_e(pipe_e.control.alu_src_b)
         .*);
 
     // Fetch
@@ -132,8 +142,14 @@ module MyCore (
             HAZ_ALU_RES_E:pipe_e_nxt.src_b=pipe_m_nxt.alu_result;
             HAZ_ALU_RES_M:pipe_e_nxt.src_b=pipe_m.alu_result;
             HAZ_RES_W:pipe_e_nxt.src_b=wd3;
+            HAZ_HI_W:pipe_e_nxt.src_b=pipe_w.hi_result;
+            HAZ_LO_W:pipe_e_nxt.src_b=pipe_w.lo_result;
             default: begin
-                pipe_e_nxt.src_b=rd2;
+                case (pipe_e_nxt.control.alu_src_b)
+                    ALU_SRC_HI:pipe_e_nxt.src_b=hi;
+                    ALU_SRC_LO:pipe_e_nxt.src_b=lo;
+                    default:pipe_e_nxt.src_b=rd2;
+                endcase
             end
         endcase
     end
@@ -147,6 +163,8 @@ module MyCore (
         endcase
     end
     always_comb begin
+        ra2=5'd0;
+        pipe_e_nxt.imm=32'd0;
         case (pipe_e_nxt.control.alu_src_b)
             ALU_SRC_RT:begin
                 ra2=pipe_e_nxt.rt;
@@ -160,8 +178,7 @@ module MyCore (
             ALU_SRC_IMM_H:pipe_e_nxt.imm={imm_d,16'd0};
             ALU_SRC_ZERO:pipe_e_nxt.imm=`SIGN_EXTEND(imm_d,32);
             default: begin
-                ra2=5'd0;
-                pipe_e_nxt.imm=32'd0;
+                
             end
         endcase
     end
@@ -229,6 +246,10 @@ module MyCore (
         case (forward_e_b)
             HAZ_RES_W:pipe_m_nxt.mem_write_val=wd3;
             HAZ_ALU_RES_M:pipe_m_nxt.mem_write_val=pipe_m.alu_result;
+            HAZ_HI_M:pipe_m_nxt.mem_write_val=pipe_m.hi_result;
+            HAZ_LO_M:pipe_m_nxt.mem_write_val=pipe_m.lo_result;
+            HAZ_HI_W:pipe_m_nxt.mem_write_val=pipe_w.hi_result;
+            HAZ_LO_W:pipe_m_nxt.mem_write_val=pipe_w.lo_result;
             default: begin
                 pipe_m_nxt.mem_write_val=pipe_e.src_b;
             end
@@ -247,6 +268,9 @@ module MyCore (
 
     // ALU
     always_comb begin
+        pipe_m_nxt.alu_result=32'd0;
+        pipe_m_nxt.hi_result=32'd0;
+        pipe_m_nxt.lo_result=32'd0;
         case (pipe_e.control.alu_op)
             ALU_OP_PLUS:    pipe_m_nxt.alu_result=  alu_input_a + alu_input_b;
             ALU_OP_MINUS:   pipe_m_nxt.alu_result=  alu_input_a - alu_input_b;
@@ -262,8 +286,16 @@ module MyCore (
             ALU_OP_SRLV:    pipe_m_nxt.alu_result=  alu_input_b >>  alu_input_a[4:0];
             ALU_OP_SLT:     pipe_m_nxt.alu_result=  {31'b0,signed'(alu_input_a)<signed'(alu_input_b)};
             ALU_OP_SLTU:    pipe_m_nxt.alu_result=  {31'b0,alu_input_a < alu_input_b};
+            ALU_OP_MULTU,ALU_OP_MULT,ALU_OP_DIVU,ALU_OP_DIV:begin
+                Mult Mult_inst(
+                    .a(alu_input_a),.b(alu_input_b),
+                    .op(pipe_e.control.alu_op),
+                    .hi(pipe_m_nxt.hi_result),
+                    .lo(pipe_m_nxt.lo_result)
+                );
+            end
             default: begin
-                pipe_m_nxt.alu_result=32'd0;
+                
             end
         endcase
     end
@@ -273,6 +305,8 @@ module MyCore (
     assign pipe_w_nxt.pc_plus8=pipe_m.pc_plus8;
     assign pipe_w_nxt.reg_write_dst=pipe_m.reg_write_dst;
     assign pipe_w_nxt.alu_result=pipe_m.alu_result;
+    assign pipe_w_nxt.hi_result=pipe_m.hi_result;
+    assign pipe_w_nxt.lo_result=pipe_m.lo_result;
     assign pipe_w_nxt.pc=pipe_m.pc;
 
     // assign pipe_w_nxt.read_data=32'd0;
