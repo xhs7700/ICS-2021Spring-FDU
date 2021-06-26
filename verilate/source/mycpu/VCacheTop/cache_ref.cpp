@@ -3,10 +3,6 @@
 
 CacheRefModel::CacheRefModel(MyCache *_top, size_t memory_size)
     : top(_top), scope(top->VCacheTop), mem(memory_size) {
-    /**
-     * TODO (Lab3) setup reference model :)
-     */
-
     mem.set_name("ref");
 }
 
