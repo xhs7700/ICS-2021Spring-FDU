@@ -78,7 +78,7 @@ WITH SKIP {
 
 // if your cache does not support partial writes, you can simply skip
 // this test by marking it with SKIP.
-WITH /*SKIP*/ {
+WITH SKIP {
     // S iterates over 0b0000 to 0b1111.
     std::vector<word_t> a;  // to store the correct value
     a.resize(16);

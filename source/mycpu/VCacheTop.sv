@@ -18,30 +18,16 @@ module VCacheTop (
     assign dcresp = cresp;
     DCache top(.*);
 
-    /**
-     * TODO (Lab3, optional) expose internal memory to simulator
-     *
-     * NOTE: it will slow down FST tracing significantly, especially
-     *       if your cache is large, you may want to speed up by adding
-     *       "// verilator tracing_off" before the declaration of
-     *       the variable mem.
-     */
-
-    /**
-     * the following is an example. Suppose that you used LUTRAM and
-     * your cache contains only four cache lines, each of which consists of
-     * 16 consecutive words in memory.
-     *
-     * later you can access the variable mem from C++ via VCacheTop->mem.
-     * it will possibly become a 1d array of uint32_t.
-     */
-    // typedef word_t [15:0] cache_line_t;
-    //
     // /* verilator tracing_off */
-    // cache_line_t [3:0] mem /* verilator public_flat_rd */;
+    word_t [63:0] mem /* verilator public_flat_rd */;
     // /* verilator tracing_on */
-    //
-    // for (genvar i = 0; i < 4; i++) begin
-    //     assign mem[i] = top.xxx.yyy.zzz.lutrams[i].ram_inst.behavioral.mem;
-    // end
+    
+    for(genvar index=0;index<4;index++)begin
+        for(genvar pos=0;pos<4;pos++)begin
+            for(genvar offset=0;offset<4;offset++)begin
+                assign mem[index*16+pos*4+offset]=top.cache[index][pos][offset];
+            end
+        end
+    end
+
 endmodule
