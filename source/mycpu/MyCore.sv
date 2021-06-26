@@ -95,11 +95,12 @@ module MyCore (
     // assign pipe_d_nxt.instr=32'd0;
     assign pipe_d_nxt.instr=iresp.data;
 
-    AddressTranslator AddressTranslator_inst1(
-        .vaddr(pipe_f.pc),
-        .paddr(ireq.addr)
-    );
+    // AddressTranslator AddressTranslator_inst1(
+    //     .vaddr(pipe_f.pc),
+    //     .paddr(ireq.addr)
+    // );
 
+    assign ireq.addr=pipe_f.pc;
     assign ireq.valid=resetn;
 
     // Decode
@@ -379,11 +380,12 @@ module MyCore (
         endcase
     end
 
-    AddressTranslator AddressTranslator_inst2(
-        .vaddr(pipe_m.alu_result),
-        .paddr(dreq.addr)
-    );
+    // AddressTranslator AddressTranslator_inst2(
+    //     .vaddr(pipe_m.alu_result),
+    //     .paddr(dreq.addr)
+    // );
 
+    assign dreq.addr=pipe_m.alu_result;
     // assign dreq.data=pipe_m.mem_write_val;
 
     // Write Back
