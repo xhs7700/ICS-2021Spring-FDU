@@ -14,7 +14,8 @@ typedef enum i4 {
     ALU_SRC_SHAMT,
     ALU_SRC_ZERO,
     ALU_SRC_HI,
-    ALU_SRC_LO
+    ALU_SRC_LO,
+    ALU_SRC_C0
 } ctrl_alu_src_t;
 
 typedef enum i5 { 
@@ -86,6 +87,14 @@ typedef enum i3 {
     LS_NONE
 } load_store_t;
 
+typedef enum i3 { 
+    EXC_None,
+    EXC_Ov,
+    EXC_Bp,
+    EXC_Eret,
+    EXC_Sys
+ } exc_t;
+
 typedef struct packed {
     ctrl_alu_src_t alu_src_a;
     ctrl_alu_src_t alu_src_b;
@@ -94,9 +103,11 @@ typedef struct packed {
     i1 reg_write_en;
     i1 mem_write_en;
     i2 hilo_write_en;
+    i1 c0_write_en;
     ctrl_reg_val_t reg_write_val;
     ctrl_reg_dst_t reg_dst;
     load_store_t ls_flag;
+    exc_t exc_flag;
 } control_t;
 
 `endif
