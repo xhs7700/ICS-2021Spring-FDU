@@ -90,7 +90,7 @@ typedef enum i3 {
 typedef enum i3 { 
     EXC_None,
     EXC_Ov,
-    EXC_Bp,
+    EXC_BP,
     EXC_Eret,
     EXC_Sys
  } exc_t;

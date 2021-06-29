@@ -47,7 +47,7 @@ module MyCore (
     cp0_reg_t cp0,cp0_nxt;
 
     i1 stall_f,stall_d,stall_e,stall_m;
-    i1 flush_e,flush_w;
+    i1 flush_e,flush_w,flush_before_w;
     hazard_forward_t forward_d_a,forward_d_b,forward_e_a,forward_e_b;
 
     // Register File
@@ -104,7 +104,7 @@ module MyCore (
         ireq.addr=pipe_f.pc;
         pipe_d_nxt.exc_code='0;
         if(ireq.addr&32'd3!='0)begin
-            pipe_d_nxt.exc_code.AdEL=1'b1;
+            pipe_d_nxt.exc_code.AdEI=1'b1;
             ireq.addr=ireq.addr&32'hfffffffc;
         end
     end
@@ -115,6 +115,7 @@ module MyCore (
     i5          branch_flag;
     i1          pc_select;
     instr_t     instr;
+    i1          ins_error;
 
     assign instr=pipe_d.instr;
     // assign instr=iresp.data;
@@ -127,6 +128,7 @@ module MyCore (
     assign branch_flag=instr[20:16];
     assign long_imm_d=instr[25:0];
 
+    assign pipe_e_nxt.exc_code.RI=ins_error;
     assign pipe_e_nxt.is_cond=pipe_d.is_cond;
     assign pipe_e_nxt.pc=pipe_d.pc;
     assign pipe_e_nxt.pc_plus8=pipe_d.pc_plus4+32'd4;
@@ -364,9 +366,49 @@ module MyCore (
     
     assign timer_int=timer_int_pre|(cp0.Count==cp0.Compare);
     assign interrupt_flag=cp0.Status[0]&(cp0.Status[1]==1'b0)&(({ext_int,2'b00}|cp0.Cause[15:8]|{timer_int,7'b0})&cp0.Status[15:8]);
-    assign pipe_m.exc_code.Int=pipe_m.exc_code.Int|(|interrupt_flag);
+    assign pipe_m.exc_code.Int=(|interrupt_flag);
 
-    // TODO 时钟中断 cp0初始化 保留指令 bp/sys
+    assign pipe_m.exc_code.BP=pipe_m.exc_code.BP|(pipe_m.control.exc_flag==EXC_BP);
+    assign pipe_m.exc_code.Sys=(pipe_m.control.exc_flag==EXC_Sys);
+
+    // Int AdEI AdEL AdES Sys BP RI Ov
+
+    always_comb begin
+        if(pipe_m.control.exc_flag==EXC_Eret)begin
+            flush_before_w=1'b1;
+            cp0_nxt.Status[1]=1'b0;
+        end else if(|pipe_m.exc_code)begin
+            flush_before_w=1'b1;
+            if(pipe_m.exc_code.Int)cp0_nxt.Cause[6:2]=5'h00;
+            else if(pipe_m.exc_code.AdEI)begin
+                cp0_nxt.Cause[6:2]=5'h04;
+                cp0_nxt.BadVAddr=pipe_m.pc;
+            end else if(pipe_m.exc_code.RI)cp0_nxt.Cause[6:2]=5'h0a;
+            else if(pipe_m.exc_code.Ov)cp0_nxt.Cause[6:2]=5'h0c;
+            else if(pipe_m.exc_code.BP)cp0_nxt.Cause[6:2]=5'h09;
+            else if(pipe_m.exc_code.Sys)cp0_nxt.Cause[6:2]=5'h08;
+            else if(pipe_m.exc_code.AdEL|pipe_m.exc_code.AdES)begin
+                cp0_nxt.Cause[6:2]=(pipe_m.exc_code.AdEL)?5'h04:5'h05;
+                cp0_nxt.BadVAddr=pipe_m.alu_result;
+            end else begin
+                flush_before_w=1'b0;
+                cp0_nxt.Cause[6:2]=5'h1f;
+            end
+            cp0_nxt.Status[1]=1'b1;
+            if(pipe_m.is_cond)begin
+                cp0_nxt.EPC=pipe_m.pc-32'd4;
+                cp0_nxt.Cause[31]=1'b1;
+            end else begin
+                cp0_nxt.EPC=pipe_m.pc;
+                cp0_nxt.Cause[31]=1'b0;
+            end
+        end else begin
+            flush_before_w=1'b0;
+            cp0_nxt.Cause[6:2]=5'h1f;
+        end
+    end
+
+    // TODO 时钟中断 cp0初始化
 
     assign pipe_w_nxt.control=pipe_m.control;
     assign pipe_w_nxt.pc_plus8=pipe_m.pc_plus8;
@@ -489,11 +531,18 @@ module MyCore (
         endcase
     end
 
-    assign pipe_f_nxt.pc=(pc_select)?pc_branch:pipe_d_nxt.pc_plus4;
+    // assign pipe_f_nxt.pc=(pc_select)?pc_branch:pipe_d_nxt.pc_plus4;
+    always_comb begin
+        if(flush_before_w)begin
+            pipe_f_nxt.pc=(pipe_m.control.exc_flag==EXC_Eret)?cp0.EPC:32'hbfc00380;
+        end else begin
+            pipe_f_nxt.pc=(pc_select)?pc_branch:pipe_d_nxt.pc_plus4;
+        end
+    end
 
     // Sequential Logic
     always_ff @( posedge clk ) begin
-        if(~resetn)begin
+        if((~resetn)|flush_before_w)begin
             pipe_f.pc<=32'hbfc0_0000;
         end else if(~stall_f)begin
             pipe_f<=pipe_f_nxt;
@@ -503,7 +552,7 @@ module MyCore (
     end
 
     always_ff @( posedge clk ) begin
-        if(~resetn)begin
+        if((~resetn)|flush_before_w)begin
             pipe_d.instr<=32'hxxxxxxxx;
             pipe_d.pc<=32'hxxxxxxxx;
             pipe_d.pc_plus4<=32'hxxxxxxxx;
@@ -517,16 +566,17 @@ module MyCore (
     end
 
     always_ff @( posedge clk ) begin
-        if((~resetn) | flush_e)begin
+        if((~resetn) | flush_e | flush_before_w)begin
             pipe_e.control<={
                 ALU_SRC_NONE,
                 ALU_SRC_NONE,
                 ALU_OP_NONE,
                 BR_NONE,
-                4'b0000,
+                5'b00000,
                 VAL_NONE,
                 REG_DST_NONE,
-                LS_NONE
+                LS_NONE,
+                EXC_None
             };
             pipe_e.is_cond<=1'b0;
             pipe_e.src_a<=32'd0;
@@ -547,16 +597,17 @@ module MyCore (
     end
 
     always_ff @( posedge clk ) begin
-        if(~resetn)begin
+        if((~resetn)|flush_before_w)begin
             pipe_m.control<={
                 ALU_SRC_NONE,
                 ALU_SRC_NONE,
                 ALU_OP_NONE,
                 BR_NONE,
-                4'b0000,
+                5'b00000,
                 VAL_NONE,
                 REG_DST_NONE,
-                LS_NONE
+                LS_NONE,
+                EXC_None
             };
             pipe_m.pc<=32'hxxxxxxxx;
             pipe_m.is_cond<=1'b0;
@@ -579,10 +630,11 @@ module MyCore (
                 ALU_SRC_NONE,
                 ALU_OP_NONE,
                 BR_NONE,
-                4'b0000,
+                5'b00000,
                 VAL_NONE,
                 REG_DST_NONE,
-                LS_NONE
+                LS_NONE,
+                EXC_None
             };
             pipe_w.pc<=32'hxxxxxxxx;
             pipe_w.read_data<=32'd0;

@@ -16,6 +16,7 @@ typedef struct packed {
 
 typedef struct packed {
     i1 Int;
+    i1 AdEI;
     i1 AdEL;
     i1 AdES;
     i1 Sys;

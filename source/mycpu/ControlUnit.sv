@@ -5,7 +5,8 @@
 module ControlUnit (
     input instr_t instr,
     input i5 branch_flag,
-    output control_t control
+    output control_t control,
+    output i1 ins_error
 );
     control_t control_nop;
     i6 opcode,funct;
@@ -23,6 +24,7 @@ module ControlUnit (
         EXC_None
     };
     always_comb begin
+        ins_error=1'b0;
         if (instr==32'd0) begin
             control=control_nop;
         end else begin
@@ -56,7 +58,7 @@ module ControlUnit (
                             control.reg_write_en=1'b0;
                             control.reg_write_val=VAL_NONE;
                             control.reg_dst=REG_DST_NONE;
-                            control.exc_flag=EXC_Bp;
+                            control.exc_flag=EXC_BP;
                         end
                         FN_DIV:begin
                             control.alu_op=ALU_OP_DIV;
@@ -158,7 +160,10 @@ module ControlUnit (
                             control.exc_flag=EXC_Sys;
                         end
                         FN_XOR:control.alu_op=ALU_OP_XOR;
-                        default:control=control_nop;
+                        default:begin
+                            control=control_nop;
+                            ins_error=1'b1;
+                        end
                     endcase
                 end
                 OP_BTYPE: begin
@@ -337,7 +342,10 @@ module ControlUnit (
                     control.alu_src_b=ALU_SRC_IMM_Z;
                     control.alu_op=ALU_OP_XOR;
                 end
-                default:control=control_nop;
+                default:begin
+                    control=control_nop;
+                    ins_error=1'b1;
+                end
             endcase
         end
     end
