@@ -190,8 +190,8 @@ module ControlUnit (
                     endcase
                 end
                 OP_COP0:begin
+                    control.alu_src_a=ALU_SRC_NONE;
                     case (instr[25:21])
-                        control.alu_src_a=ALU_SRC_NONE;
                         5'b10000:begin // ERET
                             control.alu_src_b=ALU_SRC_NONE;
                             control.reg_write_en=1'b0;
@@ -209,6 +209,9 @@ module ControlUnit (
                             control.reg_write_en=1'b0;
                             control.c0_write_en=1'b1;
                             control.reg_dst=REG_DST_RD;
+                        end
+                        default:begin
+                            
                         end
                     endcase
                 end

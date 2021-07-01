@@ -103,7 +103,7 @@ module MyCore (
     always_comb begin
         ireq.addr=pipe_f.pc;
         pipe_d_nxt.exc_code='0;
-        if(ireq.addr&32'd3!='0)begin
+        if((ireq.addr&32'd3)!=32'd0)begin
             pipe_d_nxt.exc_code.AdEI=1'b1;
             ireq.addr=ireq.addr&32'hfffffffc;
         end
@@ -284,7 +284,7 @@ module MyCore (
     always_comb begin
         case (pipe_e.control.alu_src_b)
             ALU_SRC_IMM_H,ALU_SRC_IMM_Z,ALU_SRC_IMM_S:alu_input_b=pipe_e.imm;
-            ALU_SRC_RT,ALU_SRC_HI,ALU_SRC_LO:alu_input_b=pipe_m_nxt.mem_write_val;
+            ALU_SRC_RT,ALU_SRC_HI,ALU_SRC_LO,ALU_SRC_C0:alu_input_b=pipe_m_nxt.mem_write_val;
             default: begin
                 alu_input_b=32'd0;
             end
@@ -362,36 +362,63 @@ module MyCore (
 
     // Memory
     i8 interrupt_flag;
-    i1 timer_int,timer_int_pre;
+    i1 timer_int,timer_int_pre,count_written,compare_written;
+    i1 cp0_write_en;
+    exc_code_t m_exc_code;
     
-    assign timer_int=timer_int_pre|(cp0.Count==cp0.Compare);
-    assign interrupt_flag=cp0.Status[0]&(cp0.Status[1]==1'b0)&(({ext_int,2'b00}|cp0.Cause[15:8]|{timer_int,7'b0})&cp0.Status[15:8]);
-    assign pipe_m.exc_code.Int=(|interrupt_flag);
+    assign cp0_nxt.CountFlag=cp0.CountFlag^32'd1;
+    assign timer_int=(compare_written==1'b0)&(timer_int_pre|(cp0.Count==cp0.Compare));
+    assign interrupt_flag=({ext_int,2'b00}|cp0.Cause[15:8]|{timer_int,7'b0})&cp0.Status[15:8];
 
-    assign pipe_m.exc_code.BP=pipe_m.exc_code.BP|(pipe_m.control.exc_flag==EXC_BP);
-    assign pipe_m.exc_code.Sys=(pipe_m.control.exc_flag==EXC_Sys);
+    assign m_exc_code.AdEI=pipe_m.exc_code.AdEI;
+    assign m_exc_code.RI=pipe_m.exc_code.RI;
+    assign m_exc_code.Ov=pipe_m.exc_code.Ov;
+    assign m_exc_code.Int=cp0.Status[0]&(cp0.Status[1]==1'b0)&(|interrupt_flag);
+    assign m_exc_code.BP=(pipe_m.control.exc_flag==EXC_BP);
+    assign m_exc_code.Sys=(pipe_m.control.exc_flag==EXC_Sys);
 
     // Int AdEI AdEL AdES Sys BP RI Ov
 
     always_comb begin
-        if(pipe_m.control.exc_flag==EXC_Eret)begin
+        count_written=1'b0;
+        compare_written=1'b0;
+        cp0_write_en=1'b1;
+        if(pipe_m.control.c0_write_en)begin
+            flush_before_w=1'b0;
+            if(pipe_m.reg_write_dst==5'd9)begin
+                count_written=1'b1;
+                cp0_nxt.Count=pipe_m.alu_result;
+            end else if(pipe_m.reg_write_dst==5'd11)begin
+                compare_written=1'b1;
+                cp0_nxt.Compare=pipe_m.alu_result;
+            end else if(pipe_m.reg_write_dst==5'd12)begin
+                cp0_nxt.Status=pipe_m.alu_result&32'hFE7BFF17;
+            end else if(pipe_m.reg_write_dst==5'd13)begin
+                cp0_nxt.Cause=pipe_m.alu_result&32'h8C00300;
+            end else if(pipe_m.reg_write_dst==5'd14)begin
+                cp0_nxt.EPC=pipe_m.alu_result;
+            end else begin
+                cp0_write_en=1'b0;
+            end
+        end else if(pipe_m.control.exc_flag==EXC_Eret)begin
             flush_before_w=1'b1;
             cp0_nxt.Status[1]=1'b0;
-        end else if(|pipe_m.exc_code)begin
+        end else if(|m_exc_code)begin
             flush_before_w=1'b1;
-            if(pipe_m.exc_code.Int)cp0_nxt.Cause[6:2]=5'h00;
-            else if(pipe_m.exc_code.AdEI)begin
+            if(m_exc_code.Int)cp0_nxt.Cause[6:2]=5'h00;
+            else if(m_exc_code.AdEI)begin
                 cp0_nxt.Cause[6:2]=5'h04;
                 cp0_nxt.BadVAddr=pipe_m.pc;
-            end else if(pipe_m.exc_code.RI)cp0_nxt.Cause[6:2]=5'h0a;
-            else if(pipe_m.exc_code.Ov)cp0_nxt.Cause[6:2]=5'h0c;
-            else if(pipe_m.exc_code.BP)cp0_nxt.Cause[6:2]=5'h09;
-            else if(pipe_m.exc_code.Sys)cp0_nxt.Cause[6:2]=5'h08;
-            else if(pipe_m.exc_code.AdEL|pipe_m.exc_code.AdES)begin
-                cp0_nxt.Cause[6:2]=(pipe_m.exc_code.AdEL)?5'h04:5'h05;
+            end else if(m_exc_code.RI)cp0_nxt.Cause[6:2]=5'h0a;
+            else if(m_exc_code.Ov)cp0_nxt.Cause[6:2]=5'h0c;
+            else if(m_exc_code.BP)cp0_nxt.Cause[6:2]=5'h09;
+            else if(m_exc_code.Sys)cp0_nxt.Cause[6:2]=5'h08;
+            else if(m_exc_code.AdEL|m_exc_code.AdES)begin
+                cp0_nxt.Cause[6:2]=(m_exc_code.AdEL)?5'h04:5'h05;
                 cp0_nxt.BadVAddr=pipe_m.alu_result;
             end else begin
                 flush_before_w=1'b0;
+                cp0_write_en=1'b0;
                 cp0_nxt.Cause[6:2]=5'h1f;
             end
             cp0_nxt.Status[1]=1'b1;
@@ -404,11 +431,15 @@ module MyCore (
             end
         end else begin
             flush_before_w=1'b0;
+            cp0_write_en=1'b0;
             cp0_nxt.Cause[6:2]=5'h1f;
         end
+        if(count_written==1'b0)begin
+            cp0_nxt.Count=cp0.Count+cp0.CountFlag;
+        end else begin
+            
+        end
     end
-
-    // TODO 时钟中断 cp0初始化
 
     assign pipe_w_nxt.control=pipe_m.control;
     assign pipe_w_nxt.pc_plus8=pipe_m.pc_plus8;
@@ -429,21 +460,23 @@ module MyCore (
 
     always_comb begin
         dreq.addr=pipe_m.alu_result;
+        m_exc_code.AdES=1'b0;
+        m_exc_code.AdEL=1'b0;
         if(pipe_m.control.mem_write_en)begin
             case (pipe_m.control.ls_flag)
                 LS_WORD:begin
                     dreq.strobe=4'b1111;
                     dreq.data=pipe_m.mem_write_val;
-                    if(dreq.addr&32'd3!='0)begin
-                        pipe_m.exc_code.AdES=1'b1;
+                    if((dreq.addr&32'd3)!='0)begin
+                        m_exc_code.AdES=1'b1;
                         dreq.addr=dreq.addr&32'hfffffffc;
                     end
                 end
                 LS_HALFW:begin
                     dreq.strobe=4'b11<<pipe_m.alu_result[1:0];
                     dreq.data={2{pipe_m.mem_write_val[15:0]}};
-                    if(dreq.addr&32'd1!='0)begin
-                        pipe_m.exc_code.AdES=1'b1;
+                    if((dreq.addr&32'd1)!='0)begin
+                        m_exc_code.AdES=1'b1;
                         dreq.addr=dreq.addr&32'hfffffffe;
                     end
                 end
@@ -462,16 +495,19 @@ module MyCore (
             if(pipe_m.control.reg_write_val==VAL_MEM)begin
                 case(pipe_m.control.ls_flag)
                     LS_WORD:begin
-                        if(dreq.addr&32'd3!='0)begin
-                            pipe_m.exc_code.AdEL=1'b1;
+                        if((dreq.addr&32'd3)!='0)begin
+                            m_exc_code.AdEL=1'b1;
                             dreq.addr=dreq.addr&32'hfffffffc;
                         end
                     end
                     LS_HALFW:begin
-                        if(dreq.addr&32'd1!='0)begin
-                            pipe_m.exc_code.AdEL=1'b1;
+                        if((dreq.addr&32'd1)!='0)begin
+                            m_exc_code.AdEL=1'b1;
                             dreq.addr=dreq.addr&32'hfffffffe;
                         end
+                    end
+                    default:begin
+                        
                     end
                 endcase
             end
@@ -542,9 +578,29 @@ module MyCore (
 
     // Sequential Logic
     always_ff @( posedge clk ) begin
-        if((~resetn)|flush_before_w)begin
+        if(~resetn)begin
+            cp0.BadVAddr<=32'd0;
+            cp0.Count<=32'd0;
+            cp0.CountFlag<=32'd0;
+            cp0.Compare<=32'h7fffffff;
+            cp0.Status<=32'h400004;
+            cp0.Cause<=32'd0;
+            cp0.EPC<=32'd0;
+            timer_int_pre<=1'b0;
+        end else begin
+            timer_int_pre<=timer_int;
+            if(cp0_write_en)begin
+                cp0<=cp0_nxt;
+            end else begin
+                
+            end
+        end
+    end
+
+    always_ff @( posedge clk ) begin
+        if((~resetn))begin
             pipe_f.pc<=32'hbfc0_0000;
-        end else if(~stall_f)begin
+        end else if((~stall_f)|flush_before_w)begin
             pipe_f<=pipe_f_nxt;
         end else begin
             

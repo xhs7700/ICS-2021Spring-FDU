@@ -8,6 +8,7 @@
 typedef struct packed {
     word_t BadVAddr;
     word_t Count;
+    word_t CountFlag;
     word_t Compare;
     word_t Status;
     word_t Cause;
