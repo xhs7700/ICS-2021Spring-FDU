@@ -398,6 +398,12 @@ module MyCore (
         compare_written=1'b0;
         cp0_write_en=1'b1;
         eret_flag_nxt=1'b0;
+        cp0_nxt.BadVAddr=cp0.BadVAddr;
+        cp0_nxt.Count=cp0.Count;
+        cp0_nxt.Compare=cp0.Compare;
+        cp0_nxt.Status=cp0.Status;
+        cp0_nxt.Cause=cp0.Cause;
+        cp0_nxt.EPC=cp0.EPC;
         if(pipe_m.control.c0_write_en)begin
             flush_bw_nxt=1'b0;
             if(pipe_m.reg_write_dst==5'd9)begin
